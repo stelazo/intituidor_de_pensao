@@ -1,0 +1,78 @@
+# create to Stephany Lazo
+# Base de idade e taxa de instituidor
+
+rm(list = ls())
+
+library(readxl)
+library(dplyr)
+library(KernSmooth)
+library(npreg)
+
+
+setwd("Z:/GERENCIA/RELATÓRIO DE HIPÓTESES/2023/INSTITUIDOR DE PENSÃO")
+
+
+#Functions
+GetAge = function(Date_of_birth, Date_of_death){
+  return(trunc(as.numeric(difftime(Date_of_death, Date_of_birth, units = "weeks"))/52.25))
+  }
+  
+#Analysis
+TAB = read_excel("OBITOS_GPREV_17102023_v02.xlsx",
+                  sheet = "sheet1",
+                  col_types = c("text","numeric", "text",
+                                "numeric","numeric","text",
+                                "date","date", "numeric","numeric","text", 
+                                "text")
+                 )
+
+
+TAB = data.frame(ID_SERVIDOR_MATRICULA = TAB$ID_SERVIDOR_MATRICULA,
+                 DATA_OBITO = TAB$DT_OBITO_SERVIDOR,
+                 IDADE = GetAge(TAB$DT_NASC_SERVIDOR, TAB$DT_OBITO_SERVIDOR),
+                 INSTITUIDOR = TAB$INSTITUIDOR)
+
+max(TAB$IDADE, na.rm = TRUE)
+min(TAB$IDADE, na.rm = TRUE)
+
+Idades = 18:111
+
+#Filter
+TAB = TAB[TAB$DATA_OBITO >= "2013-01-01",]
+
+TAB = TAB[TAB$IDADE %in% Idades, ]
+
+TAXAS = rep(NA, length(Idades))
+names(TAXAS) = Idades
+
+for(i in Idades)
+  {
+  tab.aux = TAB %>% filter(IDADE == i)
+  qtd.inst = sum(tab.aux$INSTITUIDOR == "1")
+  TAXAS[i-17] = qtd.inst/dim(tab.aux)[1]
+}
+
+TAXAS[is.nan(TAXAS)] = 0
+
+x = Idades
+y = TAXAS
+
+# suavização cubica
+mod.smsp = smooth.spline(x, y, nknots = 5)
+
+# plot results
+plot(x, y, main = "Percentual instituição de pensão x Idade",
+     xlab = "Idade",
+     ylab = "Taxa de pensão")
+lines(x, mod.smsp$y, lty = 3, col = 2, lwd = 2)
+lines(x, rep(0.6043, length(x)), lty = 3, col = 3, lwd = 2)
+legend("topright",
+       legend = c("Taxa(idade)", "Premissa sugerida", "Premissa atual"),
+       lty = 1:3, col = 1:3, lwd = 2, bty = "n")
+
+pen = mod.smsp$y
+
+tab = data.frame(IDADES = x, Taxas = y, pen)
+
+library(writexl)
+write_xlsx( tab, path = "./Tabua_pensao_2023.xlsx")
